@@ -25,10 +25,10 @@
 ## 📥 Tải Bản Build Sẵn (Pre-built Binaries)
 
 Bạn có thể tải các bản phát hành được biên dịch sẵn tại trang **[GitHub Releases](https://github.com/luongvantam/RADC-Decompiler/releases)**:
+- `radc-macos-universal.tar.gz` (macOS Universal - Tương thích cả Apple Silicon M1/M2/M3/M4 và Intel Mac)
 - `radc-windows-x86_64.zip` (Dành cho Windows 10/11 64-bit)
-- `radc-macos-arm64.tar.gz` (Dành cho macOS chip Apple Silicon M1/M2/M3/M4)
-- `radc-macos-x86_64.tar.gz` (Dành cho macOS chip Intel)
 - `radc-linux-x86_64.tar.gz` (Dành cho Linux x86_64 Ubuntu / Debian / Fedora / Arch)
+- `radc-wasm.tar.gz` (Bản chạy WebAssembly trên Node.js hoặc Web)
 
 ---
 

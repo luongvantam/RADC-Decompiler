@@ -25,10 +25,10 @@
 ## 📥 Download Pre-built Binaries
 
 You can download pre-compiled releases directly from the **[GitHub Releases](https://github.com/luongvantam/RADC-Decompiler/releases)** page:
+- `radc-macos-universal.tar.gz` (macOS Universal - Apple Silicon M1/M2/M3/M4 & Intel Mac)
 - `radc-windows-x86_64.zip` (Windows 10/11 64-bit)
-- `radc-macos-arm64.tar.gz` (macOS Apple Silicon M1/M2/M3/M4)
-- `radc-macos-x86_64.tar.gz` (macOS Intel)
 - `radc-linux-x86_64.tar.gz` (Linux x86_64 Ubuntu / Debian / Fedora / Arch)
+- `radc-wasm.tar.gz` (WebAssembly Node.js / Web build)
 
 ---
 
