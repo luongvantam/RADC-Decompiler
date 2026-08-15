@@ -114,7 +114,7 @@ jobs:
       - name: Build WebAssembly (WASM)
         run: |
           mkdir -p build_wasm
-          emcc -O3 -std=c++17 src/*.cpp -o build_wasm/radc.js -s NODERAWFS=1
+          em++ -O3 -std=c++17 src/*.cpp -o build_wasm/radc.js -s NODERAWFS=1
 
       - name: Package WebAssembly Artifact
         run: |

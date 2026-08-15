@@ -45,7 +45,7 @@ fi
 mkdir -p build_wasm
 
 echo "Compiling WebAssembly module..."
-emcc -O3 -std=c++17 src/*.cpp -o build_wasm/radc.js -s NODERAWFS=1
+em++ -O3 -std=c++17 src/*.cpp -o build_wasm/radc.js -s NODERAWFS=1
 
 if [ $? -eq 0 ]; then
     printf "\033[0;32m[Success] WebAssembly build completed! Output in 'build_wasm/'\033[0m\n"
