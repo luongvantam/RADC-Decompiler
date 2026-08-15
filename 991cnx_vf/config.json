@@ -1,0 +1,5 @@
+{
+    "rom": "rom.bin",
+    "gadgets": "gadgets.txt",
+    "labels": "labels.txt"
+}

@@ -1,0 +1,141 @@
+name: Build & Release Multi-Platform
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86_64
+            artifact_name: radc-linux-x86_64
+            binary_name: radc
+            cmake_generator: "Unix Makefiles"
+            archive_type: tar.gz
+          - os: windows-latest
+            arch: x86_64
+            artifact_name: radc-windows-x86_64
+            binary_name: radc.exe
+            cmake_generator: "Visual Studio 17 2022"
+            archive_type: zip
+          - os: macos-latest
+            arch: arm64
+            artifact_name: radc-macos-arm64
+            binary_name: radc
+            cmake_generator: "Unix Makefiles"
+            archive_type: tar.gz
+          - os: macos-13
+            arch: x86_64
+            artifact_name: radc-macos-x86_64
+            binary_name: radc
+            cmake_generator: "Unix Makefiles"
+            archive_type: tar.gz
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.24.x'
+
+      - name: Configure CMake (Linux / macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cmake -B build -G "${{ matrix.cmake_generator }}" -DCMAKE_BUILD_TYPE=Release
+
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -B build -G "${{ matrix.cmake_generator }}" -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: |
+          cmake --build build --config Release
+
+      - name: Prepare Package (Linux / macOS)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p package/${{ matrix.artifact_name }}
+          cp build/radc package/${{ matrix.artifact_name }}/radc
+          chmod +x package/${{ matrix.artifact_name }}/radc
+          cp -r 580vnx package/${{ matrix.artifact_name }}/580vnx
+          cp -r 991cnx_vf package/${{ matrix.artifact_name }}/991cnx_vf 2>/dev/null || true
+          cp -r src/char_to_hex.json package/${{ matrix.artifact_name }}/char_to_hex.json
+          cp run.sh package/${{ matrix.artifact_name }}/run.sh
+          chmod +x package/${{ matrix.artifact_name }}/run.sh
+          cp README.md LICENSE package/${{ matrix.artifact_name }}/
+          mkdir -p package/${{ matrix.artifact_name }}/hex_ropchain
+          mkdir -p package/${{ matrix.artifact_name }}/asm_ropchain
+          
+          cd package
+          tar -czvf ../${{ matrix.artifact_name }}.tar.gz ${{ matrix.artifact_name }}
+
+      - name: Prepare Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package\${{ matrix.artifact_name }} -Force
+          if (Test-Path build\Release\radc.exe) {
+            Copy-Item build\Release\radc.exe package\${{ matrix.artifact_name }}\radc.exe
+          } elseif (Test-Path build\radc.exe) {
+            Copy-Item build\radc.exe package\${{ matrix.artifact_name }}\radc.exe
+          }
+          Copy-Item -Recurse 580vnx package\${{ matrix.artifact_name }}\580vnx
+          if (Test-Path 991cnx_vf) { Copy-Item -Recurse 991cnx_vf package\${{ matrix.artifact_name }}\991cnx_vf }
+          Copy-Item src\char_to_hex.json package\${{ matrix.artifact_name }}\char_to_hex.json
+          Copy-Item run.bat package\${{ matrix.artifact_name }}\run.bat
+          Copy-Item README.md, LICENSE package\${{ matrix.artifact_name }}\
+          New-Item -ItemType Directory -Path package\${{ matrix.artifact_name }}\hex_ropchain -Force
+          New-Item -ItemType Directory -Path package\${{ matrix.artifact_name }}\asm_ropchain -Force
+          
+          Compress-Archive -Path package\${{ matrix.artifact_name }}\* -DestinationPath ${{ matrix.artifact_name }}.zip -Force
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}.${{ matrix.archive_type }}
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release_assets
+
+      - name: Flatten release assets
+        run: |
+          mkdir -p dist
+          find release_assets -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} dist/ \;
+          ls -la dist/
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true

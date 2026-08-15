@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RADC Decompiler - Web UI</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+        .panels {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            flex-direction: column;
+        }
+        @media (min-width: 768px) {
+            .panels {
+                flex-direction: row;
+            }
+        }
+        .panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .panel h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        textarea {
+            width: 100%;
+            height: 400px;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        .output-textarea {
+            background-color: #f8f9fa;
+        }
+        .controls {
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .loading { color: #856404; background-color: #fff3cd; padding: 10px; border-radius: 4px; margin-bottom: 15px;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RADC Decompiler</h1>
+        
+        <div id="loading-msg" class="loading">Loading WebAssembly engine... Please wait.</div>
+
+        <div class="panels">
+            <div class="panel">
+                <h3>Input Hex ROP Chain</h3>
+                <textarea id="input-hex" placeholder="Paste your hex values here (e.g., d0 08 03 00...)">d0 08 03 00 34 7b 01 00 ca ea f5 d0 d4 76 01 00
+d2 03 02 00 34 7b 01 00 24 d3 90 dc 51 94 00 00
+46 00 84 3f 02 00 0e ea 00 00 00 08 6c d9 44 01</textarea>
+            </div>
+            
+            <div class="panel">
+                <h3>Decompiled Assembly</h3>
+                <textarea id="output-asm" class="output-textarea" readonly placeholder="Output will appear here..."></textarea>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="decompile-btn" disabled>Decompile</button>
+        </div>
+        <div id="status-msg" class="status"></div>
+    </div>
+
+    <script>
+        let isReady = false;
+
+        // Configuration for Emscripten Module (MUST be defined before loading radc.js)
+        var Module = {
+            onRuntimeInitialized: function() {
+                console.log('WASM Runtime initialized');
+                
+                // Set up the virtual file system with the model files
+                setupFileSystem().then(() => {
+                    isReady = true;
+                    document.getElementById('loading-msg').style.display = 'none';
+                    document.getElementById('decompile-btn').disabled = false;
+                });
+            },
+            print: function(text) {
+                console.log(text);
+            },
+            printErr: function(text) {
+                console.error(text);
+            }
+        };
+
+        async function fetchFileToFS(path, virtualPath) {
+            try {
+                const res = await fetch(path);
+                if (!res.ok) throw new Error("Status " + res.status);
+                // Convert array buffer to Uint8Array for FS
+                const buffer = await res.arrayBuffer();
+                FS.writeFile(virtualPath, new Uint8Array(buffer));
+                console.log("Loaded " + path + " to " + virtualPath);
+            } catch (e) {
+                console.error("Failed to load " + path, e);
+            }
+        }
+
+        async function setupFileSystem() {
+            try {
+                // Ensure directories exist in MEMFS
+                FS.mkdir('/580vnx');
+                
+                // Fetch the actual files from the server
+                await Promise.all([
+                    fetchFileToFS('580vnx/config.json', '/580vnx/config.json'),
+                    fetchFileToFS('580vnx/labels.txt', '/580vnx/labels.txt'),
+                    fetchFileToFS('580vnx/gadgets.txt', '/580vnx/gadgets.txt'),
+                    fetchFileToFS('580vnx/disas.asm', '/580vnx/disas.asm'),
+                    fetchFileToFS('580vnx/disas.txt', '/580vnx/disas.txt'),
+                    fetchFileToFS('580vnx/rom.bin', '/580vnx/rom.bin')
+                ]);
+                
+                console.log("Model files created in virtual FS.");
+            } catch (e) {
+                console.error("Error setting up FS:", e);
+            }
+        }
+
+        document.getElementById('decompile-btn').addEventListener('click', () => {
+            if (!isReady) return;
+            
+            const inputHex = document.getElementById('input-hex').value;
+            const outputTextarea = document.getElementById('output-asm');
+            const statusMsg = document.getElementById('status-msg');
+            
+            if (!inputHex.trim()) {
+                statusMsg.textContent = "Please enter some hex values.";
+                statusMsg.className = "status error";
+                return;
+            }
+
+            try {
+                // 1. Write input to virtual file
+                FS.writeFile('/input.txt', inputHex);
+                
+                console.log("Running decompilation...");
+                
+                // Clear old output file if exists
+                try { FS.unlink('/output.asm'); } catch(e) {}
+                
+                // Call main(argc, argv)
+                // We use module callMain because INVOKE_RUN=0
+                const result = Module.callMain(['--no-compile', '580vnx', '/input.txt', '/output.asm']);
+                
+                // 3. Read the output file
+                if (result === 0) {
+                    const outputContent = FS.readFile('/output.asm', { encoding: 'utf8' });
+                    outputTextarea.value = outputContent;
+                    statusMsg.textContent = "Decompilation successful!";
+                    statusMsg.className = "status success";
+                } else {
+                    outputTextarea.value = "";
+                    statusMsg.textContent = "Decompilation failed with exit code " + result;
+                    statusMsg.className = "status error";
+                }
+                
+            } catch (err) {
+                console.error(err);
+                statusMsg.textContent = "Error: " + err.message;
+                statusMsg.className = "status error";
+            }
+        });
+    </script>
+    <script src="radc.js"></script>
+</body>
+</html>
