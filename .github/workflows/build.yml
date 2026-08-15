@@ -12,32 +12,36 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build on ${{ matrix.os }} (${{ matrix.arch }})
+  build-native:
+    name: Build Native on ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - name: Linux (x86_64)
+            os: ubuntu-latest
             arch: x86_64
             artifact_name: radc-linux-x86_64
             binary_name: radc
             cmake_generator: "Unix Makefiles"
             archive_type: tar.gz
-          - os: windows-latest
+          - name: Windows (x86_64)
+            os: windows-latest
             arch: x86_64
             artifact_name: radc-windows-x86_64
             binary_name: radc.exe
             cmake_generator: "Visual Studio 17 2022"
             archive_type: zip
-          - os: macos-latest
+          - name: macOS (Apple Silicon arm64)
+            os: macos-latest
             arch: arm64
             artifact_name: radc-macos-arm64
             binary_name: radc
             cmake_generator: "Unix Makefiles"
             archive_type: tar.gz
-          - os: macos-13
+          - name: macOS (Intel x86_64)
+            os: macos-13
             arch: x86_64
             artifact_name: radc-macos-x86_64
             binary_name: radc
@@ -112,9 +116,46 @@ jobs:
           path: ${{ matrix.artifact_name }}.${{ matrix.archive_type }}
           if-no-files-found: error
 
+  build-wasm:
+    name: Build WebAssembly (WASM)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Emscripten (emsdk)
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+
+      - name: Build WebAssembly (WASM)
+        run: |
+          mkdir -p build_wasm
+          emcc -O3 -std=c++17 src/*.cpp -o build_wasm/radc.js -s NODERAWFS=1
+
+      - name: Package WebAssembly Artifact
+        run: |
+          mkdir -p package/radc-wasm
+          cp -r build_wasm package/radc-wasm/
+          cp -r 580vnx package/radc-wasm/580vnx
+          cp -r 991cnx_vf package/radc-wasm/991cnx_vf 2>/dev/null || true
+          cp -r src/char_to_hex.json package/radc-wasm/char_to_hex.json
+          if [ -f test_wasm.html ]; then cp test_wasm.html package/radc-wasm/; fi
+          cp README.md LICENSE package/radc-wasm/
+          
+          cd package
+          tar -czvf ../radc-wasm.tar.gz radc-wasm
+
+      - name: Upload WASM Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: radc-wasm
+          path: radc-wasm.tar.gz
+          if-no-files-found: error
+
   release:
     name: Create GitHub Release
-    needs: build
+    needs: [build-native, build-wasm]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:

@@ -1,4 +1,5 @@
 #include "replace.hpp"
+#include <cstdint>
 #include <iostream>
 #include <fstream>
 #include <sstream>
