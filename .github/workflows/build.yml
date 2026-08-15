@@ -24,52 +24,35 @@ jobs:
             arch: x86_64
             artifact_name: radc-linux-x86_64
             binary_name: radc
-            cmake_generator: "Unix Makefiles"
             archive_type: tar.gz
           - name: Windows (x86_64)
             os: windows-latest
             arch: x86_64
             artifact_name: radc-windows-x86_64
             binary_name: radc.exe
-            cmake_generator: "Visual Studio 17 2022"
             archive_type: zip
           - name: macOS (Apple Silicon arm64)
             os: macos-latest
             arch: arm64
             artifact_name: radc-macos-arm64
             binary_name: radc
-            cmake_generator: "Unix Makefiles"
             archive_type: tar.gz
           - name: macOS (Intel x86_64)
             os: macos-13
             arch: x86_64
             artifact_name: radc-macos-x86_64
             binary_name: radc
-            cmake_generator: "Unix Makefiles"
             archive_type: tar.gz
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup CMake
-        uses: jwlawson/actions-setup-cmake@v2
-        with:
-          cmake-version: '3.24.x'
-
-      - name: Configure CMake (Linux / macOS)
-        if: runner.os != 'Windows'
-        run: |
-          cmake -B build -G "${{ matrix.cmake_generator }}" -DCMAKE_BUILD_TYPE=Release
-
-      - name: Configure CMake (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          cmake -B build -G "${{ matrix.cmake_generator }}" -A x64 -DCMAKE_BUILD_TYPE=Release
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: |
-          cmake --build build --config Release
+        run: cmake --build build --config Release --parallel
 
       - name: Prepare Package (Linux / macOS)
         if: runner.os != 'Windows'
